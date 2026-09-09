@@ -25,6 +25,7 @@ namespace SanctuaryMapConverter.Gui
         readonly TextBox _faPath = new() { Width = 340 };
         readonly TextBox _sanctuaryPath = new() { Width = 340 };
         readonly CheckBox _deploy = new() { Text = "Deploy to Sanctuary (both game and editor)", AutoSize = true, Checked = true };
+        readonly CheckBox _border = new() { Text = "Author a border around the map (the engine mirrors the map without one)", AutoSize = true, Checked = true };
         readonly TextBox _log = new()
         {
             Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
@@ -49,6 +50,9 @@ namespace SanctuaryMapConverter.Gui
             AddRow(paths, "Sanctuary install", _sanctuaryPath, MakeButton("Browse...", () => PickFolder(_sanctuaryPath, null)));
             paths.Controls.Add(new Label());
             paths.Controls.Add(_deploy);
+            paths.Controls.Add(new Label());
+            paths.Controls.Add(new Label());
+            paths.Controls.Add(_border);
             paths.Controls.Add(new Label());
 
             var convertBox = new GroupBox { Text = "Convert a Supreme Commander: Forged Alliance map", Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(10) };
@@ -250,6 +254,7 @@ namespace SanctuaryMapConverter.Gui
             {
                 Source = source,
                 Cc0Textures = cc0,
+                Border = _border.Checked,
                 Biome = (string)_convBiome.SelectedItem,
                 ScdPath = _faPath.Text.Length > 0 ? GamePaths.ScdPath(_faPath.Text) : null,
                 PackDir = _packDir,
@@ -273,6 +278,7 @@ namespace SanctuaryMapConverter.Gui
             if (_mapFolders.Count == 0) { Log("no maps listed - set the maps folder first"); return; }
             var sources = _mapFolders.ToList();
             bool cc0 = _modeCc0.Checked;
+            bool border = _border.Checked;
             string biome = (string)_convBiome.SelectedItem;
             string scd = _faPath.Text.Length > 0 ? GamePaths.ScdPath(_faPath.Text) : null;
             string sanctuary = _sanctuaryPath.Text;
@@ -291,7 +297,7 @@ namespace SanctuaryMapConverter.Gui
                     {
                         var result = new Converter(new ConvertOptions
                         {
-                            Source = src, Cc0Textures = cc0, Biome = biome, ScdPath = scd,
+                            Source = src, Cc0Textures = cc0, Biome = biome, ScdPath = scd, Border = border,
                             PackDir = packDir, TableCsv = tableCsv, OutputMapsRoot = outRoot,
                         }, _ => { }).Run();
                         if (deploy) Deployer.Deploy(result.MapDir, sanctuary, _ => { });

@@ -87,7 +87,8 @@ Everything the source map is, short of decals:
 | water | level copied; depth from the source's own deep-water elevation |
 | Mass / Hydrocarbon markers | alloy spots |
 | `ARMY_n` markers | spawns, one army each |
-| playable area | the author's `AREA_1` rectangle, guarded (see below) |
+| playable area | the author's `AREA_1` rectangle, guarded (see below), centred in a terrain twice the map's size |
+| border | authored around the map, as the shipped maps do: the edge terrain reflected outward, then warped and dissolved with distance so the engine mirrors bland ground rather than the map (see below) |
 | lighting | sun azimuth/altitude, warmth, brightness and fog thickness from the source's lighting block, clamped to the shipped ranges; the biome (the GUI's Lighting biome, or `--biome`; default Tropical) fills in the rest |
 | stratum textures | carried (default) or substituted with CC0 (option) |
 | splat weights | the author's own masks, resampled to `heightmapResolution` |
@@ -105,6 +106,34 @@ bands). But adaptive_corona writes `RECTANGLE(0,0,0,0)` and final_rush defines
 a 50 m starting box that a script grows at run time, so a rectangle is adopted
 only if it is at least 16 m a side, covers ≥ 25% of the map, and contains every
 spawn. Anything else falls back to the full map.
+
+**The map gets a border, because the engine never shows an edge.** Beyond the
+terrain, Sanctuary's `InfiniteTerrain` builds eight more terrains - the
+heightmap mirrored across each edge and flattened towards the mean height on
+the far side - and the terrain shader carries the textures over them. There is
+no map-file switch for it. A map that fills its whole terrain therefore
+appears surrounded by eight reflected copies of itself, which is what an early
+conversion looked like. The developers' own maps never fill their terrain:
+all four hand-made ones (The Forge, White Desert, Two Step Shuffle, There Is
+Time) centre the playable rectangle in a terrain twice its size, with a border
+that continues the edge but carries none of the map's features - The Forge's
+border matches its interior to 0.14 m one cell out and has diverged by 16 m
+two hundred cells out. The converter does the same: the heightmap and splat
+stay byte-exact in the centre, and the border is two things cross-faded. A
+thin band of the map's own edge reflected outward, blurred and warped a
+little more with every metre, makes the join seamless. Beyond it is
+synthetic ground: the mean height of the nearest map edge, easing towards
+the map's overall mean further out, with rolling hills scaled to the map's
+own relief. The fade between them is complete by 15% of the border, because
+a reflection that lingers any longer reads as a mirror on any map with big
+features - the first attempt let it linger, and every landmass on Seton's
+Clutch came out as a butterfly folded over the playable edge. Nothing of the
+map's shapes survives into the far ground. Twice the size is forced, not chosen: Unity wants a
+heightmap resolution of 2^n + 1, and with the interior kept sample-exact the
+next power of two is the only extension. Every world position - spawns,
+resource spots, props, wreckage, the `PlayableArea` rectangle - is offset
+into the centre. `--no-border` (or the GUI checkbox) writes the old
+edge-to-edge map instead.
 
 **Lighting crosses two renderers**, so only quantities with a physical meaning
 on both sides transfer: sun azimuth (which side of a ridge holds the shadow —
@@ -129,7 +158,9 @@ hand-made tint is the reference for how much variation a shipped map carries.
 **The heightmap is byte-exact.** SupCom stores uint16 at a height scale of
 1/128 on every map ever shipped; Sanctuary stores uint16 scaled by
 `height/65535`. Set `height` to 512 and `65535/512 = 128` — the same
-fixed-point encoding. The converter asserts a zero-error round trip.
+fixed-point encoding. The converter asserts a zero-error round trip. The
+border added around the map is new ground; the interior is the source's own
+samples.
 
 **z runs the opposite way.** SupCom draws heightmap row 0 at the top, so its z
 grows southward; Sanctuary's grows northward. The import negates z on the

@@ -17,6 +17,7 @@ namespace SanctuaryMapConverter.Core
         public string PropExtension = ".santp";
         public double VerticalScale = 1.0;
         public bool NoProps;
+        public bool Border = true;               // author a border around the map, as the shipped maps do
         public int MaxProps = 20000;
         public double Cc0TileMult = 2.5;
         public double Cc0NormalScale = 0.45;
@@ -232,9 +233,23 @@ namespace SanctuaryMapConverter.Core
             }
             MapGen.SetPreviewLayerColors(prevFiles, prevRemaps);
 
-            MapGen.WriteHeightmap(Path.Combine(texDir, "heightmap.raw"));
+            // The preview is the map, not the terrain: drawn before the
+            // border goes on, like the shipped maps' own previews.
             MapGen.WritePreview(Path.Combine(texDir, "preview.png"), 512, false, null, null, null);
             File.Copy(Path.Combine(texDir, "preview.png"), Path.Combine(mapDir, "preview.png"), true);
+
+            // ---- border --------------------------------------------------
+            // The engine mirrors whatever reaches the terrain edge - see
+            // src/ScMapBorder.cs. Everything positioned from here on is
+            // offset by `off` into the centre of the larger terrain.
+            int off = 0;
+            if (O.Border)
+            {
+                off = MapGen.ExtendBorder();
+                Log($"  border: {off} m of dissolved edge terrain on every side; terrain {(int)MapGen.MapSize} m, playable {size} m in the centre");
+            }
+
+            MapGen.WriteHeightmap(Path.Combine(texDir, "heightmap.raw"));
             MapGen.WriteStratums(texDir);
             MapGen.WriteTints(texDir, 2048);
 
@@ -269,7 +284,7 @@ namespace SanctuaryMapConverter.Core
                         double sz = Math.Clamp(p.ScaleZ, 0.5, 2.0) * gs;
 
                         list.Add(Json.Obj(
-                            ("position", Json.Vec3(Math.Round(p.X, 3), Math.Round(p.Y, 3), Math.Round(p.Z, 3))),
+                            ("position", Json.Vec3(Math.Round(p.X + off, 3), Math.Round(p.Y, 3), Math.Round(p.Z + off, 3))),
                             ("rotation", Json.Quat(0.0, Math.Round(Math.Sin(p.Yaw / 2), 7), 0.0, Math.Round(Math.Cos(p.Yaw / 2), 7))),
                             ("scale", Json.Vec3(Math.Round(sx, 4), Math.Round(sy, 4), Math.Round(sz, 4)))));
                     }
@@ -316,6 +331,7 @@ namespace SanctuaryMapConverter.Core
                         if (x < 0 || x > size || z < 0 || z > size) { wskipped++; continue; }
                         string mesh = MapGen.ScWreckBlueprint(w.Type, wtable);
                         if (mesh == null) { wskipped++; continue; }
+                        x += off; z += off;
                         double yaw = Math.PI - w.Yaw;        // the z negation mirrors the heading
                         if (!wbuckets.TryGetValue(mesh, out var list)) wbuckets[mesh] = list = new List<JObj>();
                         list.Add(Json.Obj(
@@ -352,8 +368,8 @@ namespace SanctuaryMapConverter.Core
             var armies = new JObj();
             for (int i = 0; i < spawns.Count; i++)
             {
-                double ax = MapGen.SnapBuild((float)spawns[i].X);
-                double az = MapGen.SnapBuild((float)spawns[i].Z);
+                double ax = MapGen.SnapBuild((float)spawns[i].X) + off;
+                double az = MapGen.SnapBuild((float)spawns[i].Z) + off;
                 string key = $"ARMY_{i + 1}";
                 spawnT.Add(key, Transform(ax, Math.Round(MapGen.HeightAtWorld((float)ax, (float)az), 2), az));
                 armies.Add(key, Json.Obj(("faction", 0), ("alloys", 500.0), ("energy", 500.0), ("groups", Json.Obj())));
@@ -361,8 +377,8 @@ namespace SanctuaryMapConverter.Core
             var alloyT = new JObj();
             for (int i = 0; i < mexX.Count; i++)
             {
-                double px = MapGen.SnapBuild((float)mexX[i]);
-                double pz = MapGen.SnapBuild((float)mexZ[i]);
+                double px = MapGen.SnapBuild((float)mexX[i]) + off;
+                double pz = MapGen.SnapBuild((float)mexZ[i]) + off;
                 alloyT.Add($"Alloys_{i + 1:D3}", Transform(px, Math.Round(MapGen.HeightAtWorld((float)px, (float)pz), 2), pz));
             }
 
@@ -370,7 +386,7 @@ namespace SanctuaryMapConverter.Core
                 ("fileVersion", 3), ("mapVersion", 1),
                 ("name", srcName),
                 ("credits", $"Converted from Supreme Commander: Forged Alliance - {Path.GetFileName(scmapFile)}"),
-                ("width", size), ("length", size),
+                ("width", (int)MapGen.MapSize), ("length", (int)MapGen.MapSize),
                 ("height", MapHeight),
                 ("heightmapResolution", MapGen.HRes),
                 ("hasWater", sc.HasWater),
@@ -393,10 +409,14 @@ namespace SanctuaryMapConverter.Core
                 ("fogAttenuationDistance", fogAtt),
                 ("fogBaseHeight", 6.0), ("fogMaximumHeight", 140.0), ("fogMaximumDistance", 1800.0), ("fogAnisotropy", 0.0),
                 ("skybox", Json.Obj(("path", "Environment/Skybox/kloofendal_48d_partly_cloudy_puresky_4k.exr"))),
-                ("areas", Json.Obj(("Playable", playable != null
-                    ? Json.Obj(("x", (double)playable[0]), ("y", (double)playable[1]),
+                // "PlayableArea" is the key the engine looks up (it falls back
+                // to the first area, which is how the old "Playable" worked).
+                // The rectangle drives the out-of-bounds fog; the border sits
+                // outside it.
+                ("areas", Json.Obj(("PlayableArea", playable != null
+                    ? Json.Obj(("x", playable[0] + (double)off), ("y", playable[1] + (double)off),
                                ("width", (double)playable[2]), ("height", (double)playable[3]))
-                    : Json.Obj(("x", 0.0), ("y", 0.0), ("width", (double)size), ("height", (double)size))))),
+                    : Json.Obj(("x", (double)off), ("y", (double)off), ("width", (double)size), ("height", (double)size))))),
                 ("armies", armies),
                 ("chains", Json.Obj()),
                 ("markers", Json.Obj(

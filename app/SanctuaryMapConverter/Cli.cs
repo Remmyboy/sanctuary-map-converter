@@ -6,7 +6,7 @@ namespace SanctuaryMapConverter
     // a terminal, for scripting a batch of conversions.
     //
     //   SanctuaryMapConverter --convert <sourceFolder> [--cc0] [--biome B] [--name X]
-    //       [--out <mapsRoot>] [--deploy] [--prop-ext .santp|.sanprop] [--no-props]
+    //       [--out <mapsRoot>] [--deploy] [--prop-ext .santp|.sanprop] [--no-props] [--no-border]
     //   SanctuaryMapConverter --validate <path.sanmap> [--check-textures]
     //       [--gamedata <dir>] [--lua] [--managed <dir>]
     //   SanctuaryMapConverter --check-deployed
@@ -25,7 +25,7 @@ namespace SanctuaryMapConverter
         static int Usage()
         {
             Console.Error.WriteLine(
-                "usage: --convert <sourceFolder> [--cc0] [--biome B] [--name X] [--out dir] [--deploy]\n" +
+                "usage: --convert <sourceFolder> [--cc0] [--biome B] [--name X] [--out dir] [--deploy] [--no-props] [--no-border]\n" +
                 "       --validate <map.sanmap> [--check-textures] [--lua]\n" +
                 "       --check-deployed\n" +
                 "       --tool <name> [...]");
@@ -70,6 +70,7 @@ namespace SanctuaryMapConverter
                     case "--deploy": deploy = true; break;
                     case "--prop-ext": o.PropExtension = args[++i]; break;
                     case "--no-props": o.NoProps = true; break;
+                    case "--no-border": o.Border = false; break;
                     default:
                         if (o.Source == null) o.Source = args[i];
                         else { Console.Error.WriteLine($"unknown argument: {args[i]}"); return 2; }
