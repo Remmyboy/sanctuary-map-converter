@@ -150,12 +150,16 @@ namespace SanctuaryMapConverter.Core
             if (Directory.Exists(tex))
                 foreach (var dd in Directory.EnumerateFiles(tex, "*.dds"))
                 {
-                    var hb = new byte[88];
+                    var hb = new byte[96];
                     using var hs = File.OpenRead(dd);
-                    int read = hs.Read(hb, 0, 88);
-                    if (read < 88 || Encoding.ASCII.GetString(hb, 0, 4) != "DDS ") continue;
+                    int read = hs.Read(hb, 0, 96);
+                    if (read < 96 || Encoding.ASCII.GetString(hb, 0, 4) != "DDS ") continue;
                     if (Encoding.ASCII.GetString(hb, 84, 4) == "DXT3")
                         throw new Exception($"{Path.GetFileName(dd)} is DXT3 - Unity has no format for BC2, so it loads as a blank white surface");
+                    // See src/Dxt.cs: the terrain ignores the loader's
+                    // blue/red flag, so 24-bit BGR renders channel-swapped.
+                    if ((BitConverter.ToInt32(hb, 80) & 0x4) == 0 && BitConverter.ToInt32(hb, 88) == 24 && BitConverter.ToUInt32(hb, 92) == 0xff0000u)
+                        throw new Exception($"{Path.GetFileName(dd)} is 24-bit BGR - the terrain samples it with red and blue swapped (a normal map renders black)");
                 }
 
             // A stratum slot that carries splat weight has to be painted by

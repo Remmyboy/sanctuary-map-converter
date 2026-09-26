@@ -13,7 +13,7 @@ namespace SanctuaryMapConverter.Core
     // redistributable by construction.
     public sealed class ExportResult
     {
-        public int Copied, Transcoded, Inexact;
+        public int Copied, Transcoded, Widened, Inexact;
         public readonly List<string> Missing = new();
         public readonly Dictionary<string, string> Names = new(StringComparer.OrdinalIgnoreCase);
         public readonly Dictionary<string, string> Normals = new(StringComparer.OrdinalIgnoreCase);
@@ -72,7 +72,8 @@ namespace SanctuaryMapConverter.Core
         /// Source-texture mode: extract each referenced texture from env.scd,
         /// or from the map's own folder for /maps/ paths. DXT3 - a format
         /// Unity cannot load - is transcoded to DXT5 with the colour block
-        /// copied bit-exact.
+        /// copied bit-exact; 24-bit BGR - which the terrain samples with red
+        /// and blue swapped - is widened to 32-bit BGRA.
         public static ExportResult ExportSource(
             string scdPath, string[] texturePaths, string[] normalPaths,
             string destDir, string mapsRoot, Action<string> log)
@@ -118,6 +119,8 @@ namespace SanctuaryMapConverter.Core
                 if (bytes == null) { r.Missing.Add(key); continue; }
 
                 if (MapGen.TranscodeDxt3ToDxt5(bytes)) r.Transcoded++;
+                var wide = MapGen.ExpandBgr24ToBgra32(bytes);
+                if (wide != null) { bytes = wide; r.Widened++; }
 
                 // Only recorded once the file is known to exist - a name here
                 // with no file behind it becomes a layer pointing at nothing.
