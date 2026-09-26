@@ -199,7 +199,8 @@ namespace SanctuaryMapConverter.Core
                     texDir, Path.GetDirectoryName(O.Source), Log);
                 Log($"  textures: {texSet.UsedLayers} source layers, {exp.Copied} files copied, splat {texSet.MaskSize} -> {MapGen.SRes}" +
                     (MapGen.DroppedLayers > 0 ? $", {MapGen.DroppedLayers} unassigned layer(s) zeroed" : "") +
-                    (exp.Transcoded > 0 ? $", {exp.Transcoded} DXT3 -> DXT5" : ""));
+                    (exp.Transcoded > 0 ? $", {exp.Transcoded} DXT3 -> DXT5" : "") +
+                    (exp.Widened > 0 ? $", {exp.Widened} BGR24 -> BGRA32" : ""));
             }
             if (exp.Missing.Count > 0)
                 Log($"  textures not found: {string.Join(", ", exp.Missing.Take(3))}");

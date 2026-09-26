@@ -84,4 +84,66 @@ public static partial class MapGen
         dds[87] = (byte)'5';
         return true;
     }
+
+    // 24-bit BGR is loadable but not renderable on terrain.
+    //
+    // The engine's DDSLoader reads a 24-bit DDS as R8G8B8 and, when the masks
+    // say the bytes are really B,G,R, raises a flipBlueRed flag instead of
+    // swapping them. Only Data.SetMaterialTexture honours that flag (as a
+    // per-material "_brs" float); MapManager binds stratum layers with a plain
+    // SetTexture, so the terrain shader samples red and blue swapped. On a
+    // normal map that trades X for Z: every texel lies on its side, and the
+    // layer renders near-black from above. Saltrock Colony's rock trench and
+    // the rock on Fields of Isis went black this way - des_rock01_normal and
+    // des_rock03a_normal are the uncompressed ones.
+    //
+    // 32-bit BGRA loads as B8G8R8A8 with no flag involved, so widening each
+    // pixel by an opaque alpha byte fixes it losslessly. Every mip is the same
+    // 3-byte stride, so the whole payload converts in one walk.
+
+    /// True if this DDS is uncompressed 24-bit with the usual B,G,R byte order.
+    public static bool IsBgr24(byte[] dds)
+    {
+        return dds != null && dds.Length >= 128 &&
+               dds[0] == 0x44 && dds[1] == 0x44 && dds[2] == 0x53 && dds[3] == 0x20 &&
+               (BitConverter.ToInt32(dds, 80) & 0x4) == 0 &&
+               BitConverter.ToInt32(dds, 88) == 24 &&
+               BitConverter.ToUInt32(dds, 92) == 0xff0000u &&
+               BitConverter.ToUInt32(dds, 96) == 0x00ff00u &&
+               BitConverter.ToUInt32(dds, 100) == 0x0000ffu;
+    }
+
+    /// A 24-bit BGR DDS rewritten as 32-bit BGRA with alpha 255, or null if
+    /// this is not one (or its payload is not whole pixels), so a surprising
+    /// file falls through untouched.
+    public static byte[] ExpandBgr24ToBgra32(byte[] dds)
+    {
+        if (!IsBgr24(dds)) return null;
+        int start = 128;
+        int len = dds.Length - start;
+        if (len <= 0 || len % 3 != 0) return null;
+
+        int pixels = len / 3;
+        var outb = new byte[start + pixels * 4];
+        Buffer.BlockCopy(dds, 0, outb, 0, start);
+        for (int i = 0, s = start, d = start; i < pixels; i++, s += 3, d += 4)
+        {
+            outb[d] = dds[s];
+            outb[d + 1] = dds[s + 1];
+            outb[d + 2] = dds[s + 2];
+            outb[d + 3] = 255;
+        }
+
+        const int DDPF_ALPHAPIXELS = 0x1, DDSD_PITCH = 0x8, DDSD_LINEARSIZE = 0x80000;
+        int flags = BitConverter.ToInt32(outb, 8);
+        int width = BitConverter.ToInt32(outb, 16), height = BitConverter.ToInt32(outb, 12);
+        if ((flags & DDSD_PITCH) != 0)
+            BitConverter.GetBytes(width * 4).CopyTo(outb, 20);
+        else if ((flags & DDSD_LINEARSIZE) != 0)
+            BitConverter.GetBytes(width * height * 4).CopyTo(outb, 20);
+        BitConverter.GetBytes(BitConverter.ToInt32(outb, 80) | DDPF_ALPHAPIXELS).CopyTo(outb, 80);
+        BitConverter.GetBytes(32).CopyTo(outb, 88);
+        BitConverter.GetBytes(0xff000000u).CopyTo(outb, 104);
+        return outb;
+    }
 }

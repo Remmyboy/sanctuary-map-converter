@@ -177,7 +177,10 @@ marker heights; a genuine mirror measures 12 m and up).
 map's own folder — about one community map in ten ships its own art), carried
 in the map folder and referenced as `map/Textures/...`. DXT3 textures — one in
 eleven of SupCom's, a format Unity cannot load — are transcoded to DXT5 with
-the colour block copied bit-exact. The result looks closest to the original
+the colour block copied bit-exact, and uncompressed 24-bit ones are widened
+to 32-bit BGRA: the terrain samples 24-bit DDS with red and blue swapped,
+which turns a normal map black (22 of the 51 stock maps carry one). The
+result looks closest to the original
 and is **local-play only**: the folder contains someone else's art.
 
 **CC0 mode: substitutes from a CC0 library** (ambientCG; ~30 materials,
@@ -285,7 +288,7 @@ terrain.
 
 | check | what it catches |
 |---|---|
-| `--validate` | the game's own Newtonsoft parse into `EM.Map.SanMap`; asset resolution per build tree; splat weight on placeholder textures; DXT3 in the map folder |
+| `--validate` | the game's own Newtonsoft parse into `EM.Map.SanMap`; asset resolution per build tree; splat weight on placeholder textures; DXT3 or 24-bit BGR DDS in the map folder (with `--check-textures`) |
 | `--validate --lua` | the game's own `json.lua` (stricter than Newtonsoft) |
 | `--deploy-all` | all of the above against every deployed tree, after mirroring |
 | `--tool test-environment` | the ~30 lighting/fog fields against the range the shipped maps use |
