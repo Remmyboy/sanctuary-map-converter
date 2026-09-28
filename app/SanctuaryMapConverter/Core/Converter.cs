@@ -191,7 +191,8 @@ namespace SanctuaryMapConverter.Core
                 exp = TextureExport.ExportCc0(texSet.Paths, texDir, O.PackDir, O.TableCsv, Log);
                 Log($"  textures: {texSet.UsedLayers} source layers, {exp.Copied} files copied, splat {texSet.MaskSize} -> {MapGen.SRes}" +
                     (MapGen.DroppedLayers > 0 ? $", {MapGen.DroppedLayers} unassigned layer(s) zeroed" : "") +
-                    $", CC0 substitutes ({exp.Inexact} inexact role)");
+                    $", CC0 substitutes ({exp.Inexact} inexact role)" +
+                    (exp.Matted > 0 ? $", {exp.Matted} mask(s) matted to role smoothness" : ""));
             }
             else
             {

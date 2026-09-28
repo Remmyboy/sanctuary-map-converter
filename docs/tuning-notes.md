@@ -34,7 +34,7 @@ and not the maths.
 | stratum `tileSize` | shader scale is `1 / tileSize`, so the value is **metres per repeat** | `MapManager.SetMaterialStratumValues` |
 | stratum `diffuseRemap` | `_DiffuseRemapScale`, a per-channel multiplier on the albedo | same |
 | stratum `farColorRemap` | `_DiffuseRemapScale_Far`, converted to linear first. What alpha does is in the shader; shipped rock layers use `(1,1,1,0)` as we do | same |
-| stratum `maskRemapMin` / `maskRemapMax` | `_MaskMapRemapOffset` / `_MaskMapRemapScale`: HDRP's `offset + mask × scale`, so "max" is a **scale**, not an upper bound. Identity is `(0,0,0,0)` / `(1,1,1,1)`, which we write | same |
+| stratum `maskRemapMin` / `maskRemapMax` | `_MaskMapRemapOffset` / `_MaskMapRemapScale`: HDRP's `offset + mask × scale` by their names, so "max" would be a scale. **But scaling `maskRemapMax.w` did not change smoothness in game** (Sung Island A/B, 2026-09-28), so do not rely on it: change the mask pixels instead. Identity is `(0,0,0,0)` / `(1,1,1,1)`, which we write | same |
 | stratum mask texture | `_LayerHasMask.x` is 1 when the layer has one, 0 otherwise | same |
 | stratum textures (all three) | bound with plain `SetTexture`, so the loader's blue/red flag is lost; 24-bit BGR DDS renders channel-swapped (see `src/Dxt.cs`) | `MapManager.UpdateStratumLayerMaterials` |
 
@@ -44,6 +44,14 @@ exposure 12 + 2.5, fog 200 m mean free path, `heightTransition` 0.5,
 `waterDepth` 0. Third-party generators that start from these
 (tgorzney/Sanctuary_MapGen does) produce maps that look nothing like the
 developers' own.
+
+The developers' own generator (the one behind the shipped `~TEAM`/`~FFA` maps;
+source in Bentu999's Triple-S repo, `Sanctuary-Map-Generation-develop/`)
+computes none of the lighting, fog, water or stratum values: each biome is one
+of the four hand-made maps' settings copied verbatim. It writes `tint_colors`
+as a flat 127 in every channel, and `tint_geometry` as a detail normal
+(noise-roughened minus smooth terrain normals, not the terrain's own). White
+Desert ships a flat `tint_geometry`, as we do.
 
 ## The one assumption, not a number
 
@@ -89,10 +97,15 @@ developers' own.
 
 Banded around the shipped mean of 36.4 — the dial with the wet-plastic
 history. Judge on Seton's mud flats vs its rock. The values themselves are
-not something the engine can settle. If per-role mask files ever become a
-nuisance, the same result is available from one shared mask plus
-`maskRemapMin.w` / `maskRemapMax.w`, since the engine applies HDRP's
-`offset + mask × scale` per channel.
+not something the engine can settle. Scaling through `maskRemapMax.w`
+instead of the mask pixels was tried and did nothing in game.
+
+**CC0 mode uses the same targets.** The CC0 pack's masks carry each material's
+real smoothness (from ambientCG roughness): 63–229 across the 30 materials,
+Sung Island's grass at 115. In game that read as the whole map being wet. On
+export each CC0 mask's alpha is now scaled so its mean lands on the role
+target below (`MapGen.ScaleDxt5AlphaMean`, role from the CC0 material name),
+keeping the material's own variation. Confirmed by eye on Sung Island.
 
 | role | value | | role | value |
 |---|---|---|---|---|

@@ -13,7 +13,7 @@ namespace SanctuaryMapConverter.Core
     // redistributable by construction.
     public sealed class ExportResult
     {
-        public int Copied, Transcoded, Widened, Inexact;
+        public int Copied, Transcoded, Widened, Matted, Inexact;
         public readonly List<string> Missing = new();
         public readonly Dictionary<string, string> Names = new(StringComparer.OrdinalIgnoreCase);
         public readonly Dictionary<string, string> Normals = new(StringComparer.OrdinalIgnoreCase);
@@ -176,7 +176,17 @@ namespace SanctuaryMapConverter.Core
                     if (!File.Exists(src)) continue;
                     string leaf = Path.GetFileName(src);
                     string outPath = Path.Combine(destDir, leaf);
-                    if (!File.Exists(outPath)) { File.Copy(src, outPath); r.Copied++; }
+                    if (!File.Exists(outPath))
+                    {
+                        // The pack's masks are far glossier than anything the
+                        // game ships (see src/Dxt.cs); bring each down to its
+                        // role's smoothness on the way out.
+                        byte[] bytes = File.ReadAllBytes(src);
+                        if (kind == 'm' && MapGen.ScaleDxt5AlphaMean(bytes, MapGen.RoleSmoothness(MapGen.ScTextureRole(row.Cc0))))
+                            r.Matted++;
+                        File.WriteAllBytes(outPath, bytes);
+                        r.Copied++;
+                    }
                     switch (kind)
                     {
                         case 'a': r.Names[p] = leaf; break;
