@@ -94,7 +94,7 @@ Everything the source map is, short of decals:
 | splat weights | the author's own masks, resampled to `heightmapResolution` |
 | normal maps | the author's true normal **per layer** |
 | macro overlay | the UpperStratum macrotexture, baked into `tint_colors` at its own repeat (source-texture mode only — the bake copies GPG pixels) |
-| mask maps | per-role smoothness in source mode — mud glistens, rock sheds light, grass stays matte (CC0 mode already carries each material's real mask) |
+| mask maps | per-role smoothness in source mode — mud glistens, rock sheds light, grass stays matte. CC0 mode keeps each material's own mask but scales its smoothness to the same per-role targets, since the raw masks read as wet in game |
 | props | the author's placements — trees, groups, rocks — onto a biome-matched Sanctuary palette |
 | wreckage | `WRECKAGE`-group wrecks as harvestable wreck props, size-matched onto the Playtest build's six wreck meshes; walls and sub-30-mass debris skipped (every wreck blueprint is worth the same placeholder 100 alloys, so a wall would be a goldmine). `docs/unit-wrecks.csv` carries each FA unit's mass and hitbox (regenerate with `tools\Measure-ScUnits.ps1`) |
 | preview | drawn from the map's own textures, with numbered spawn badges in the palette the developers use |
@@ -203,7 +203,9 @@ Two dials tame the photographic sources: `-Cc0TileMult` (default 2.5 — photo
 features are centimetre-scale where FA paints for a 4–10 m repeat) and
 `-Cc0NormalScale` (default 0.45 — photogrammetry normals are strong). CC0
 layers also get real per-material mask maps built from the sources' AO and
-roughness. `--tool compare-textures` renders any two deployed maps'
+roughness, with smoothness scaled down to the same per-role targets as source
+mode: raw, they average 63–229 of 255 against the shipped maps' 36, and the
+whole map reads as wet. `--tool compare-textures` renders any two deployed maps'
 layers side by side, as configured, for auditing pairs.
 
 ---

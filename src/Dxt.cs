@@ -43,45 +43,112 @@ public static partial class MapGen
             // DXT3 alpha: sixteen 4-bit values, two per byte, low nibble first.
             // Replicate the nibble rather than shifting, so 15 becomes 255 and
             // not 240 - an opaque texel has to stay opaque.
-            int lo = 255, hi = 0;
             for (int i = 0; i < 8; i++)
             {
                 int by = dds[p + i];
                 int v0 = by & 0x0f, v1 = (by >> 4) & 0x0f;
-                int e0 = (v0 << 4) | v0, e1 = (v1 << 4) | v1;
-                a8[i * 2] = e0; a8[i * 2 + 1] = e1;
-                if (e0 < lo) lo = e0; if (e0 > hi) hi = e0;
-                if (e1 < lo) lo = e1; if (e1 > hi) hi = e1;
+                a8[i * 2] = (v0 << 4) | v0;
+                a8[i * 2 + 1] = (v1 << 4) | v1;
             }
-
-            // DXT5 alpha: two endpoints then sixteen 3-bit indices. With
-            // a0 > a1 the six interior values are evenly spaced between them,
-            // so putting the endpoints at the block's own max and min spans
-            // exactly the range present. The source has only sixteen distinct
-            // levels to begin with, so eight well-placed ones lose very little.
-            dds[p] = (byte)hi;
-            dds[p + 1] = (byte)lo;
-            for (int i = 2; i < 8; i++) dds[p + i] = 0;
-
-            if (hi == lo) continue;                 // flat block: all index 0
-
-            ulong bits = 0;
-            for (int i = 0; i < 16; i++)
-            {
-                // Nearest of the eight representable values.
-                int best = 0, bestErr = int.MaxValue;
-                for (int k = 0; k < 8; k++)
-                {
-                    int val = k == 0 ? hi : k == 1 ? lo : ((8 - k) * hi + (k - 1) * lo) / 7;
-                    int err = a8[i] - val; if (err < 0) err = -err;
-                    if (err < bestErr) { bestErr = err; best = k; }
-                }
-                bits |= (ulong)best << (i * 3);
-            }
-            for (int i = 0; i < 6; i++) dds[p + 2 + i] = (byte)(bits >> (i * 8));
+            // The source has only sixteen distinct levels to begin with, so
+            // eight well-placed ones lose very little.
+            EncodeDxt5Alpha(dds, p, a8);
         }
 
         dds[87] = (byte)'5';
+        return true;
+    }
+
+    /// Sixteen alpha values of one DXT5 block, in texel order.
+    static void DecodeDxt5Alpha(byte[] dds, int p, int[] a8)
+    {
+        int a0 = dds[p], a1 = dds[p + 1];
+        ulong bits = 0;
+        for (int i = 0; i < 6; i++) bits |= (ulong)dds[p + 2 + i] << (i * 8);
+        for (int i = 0; i < 16; i++)
+        {
+            int k = (int)((bits >> (i * 3)) & 7);
+            a8[i] = k == 0 ? a0 : k == 1 ? a1
+                  : a0 > a1 ? ((8 - k) * a0 + (k - 1) * a1) / 7
+                  : k == 6 ? 0 : k == 7 ? 255 : ((6 - k) * a0 + (k - 1) * a1) / 5;
+        }
+    }
+
+    /// Write sixteen alpha values as a DXT5 alpha block. With a0 > a1 the six
+    /// interior values are evenly spaced between the endpoints, so putting
+    /// them at the block's own max and min spans exactly the range present.
+    static void EncodeDxt5Alpha(byte[] dds, int p, int[] a8)
+    {
+        int lo = 255, hi = 0;
+        for (int i = 0; i < 16; i++) { if (a8[i] < lo) lo = a8[i]; if (a8[i] > hi) hi = a8[i]; }
+
+        dds[p] = (byte)hi;
+        dds[p + 1] = (byte)lo;
+        for (int i = 2; i < 8; i++) dds[p + i] = 0;
+
+        if (hi == lo) return;                       // flat block: all index 0
+
+        ulong bits = 0;
+        for (int i = 0; i < 16; i++)
+        {
+            // Nearest of the eight representable values.
+            int best = 0, bestErr = int.MaxValue;
+            for (int k = 0; k < 8; k++)
+            {
+                int val = k == 0 ? hi : k == 1 ? lo : ((8 - k) * hi + (k - 1) * lo) / 7;
+                int err = a8[i] - val; if (err < 0) err = -err;
+                if (err < bestErr) { bestErr = err; best = k; }
+            }
+            bits |= (ulong)best << (i * 3);
+        }
+        for (int i = 0; i < 6; i++) dds[p + 2 + i] = (byte)(bits >> (i * 8));
+    }
+
+    // CC0 masks are too glossy for Sanctuary.
+    //
+    // The pack's masks carry each material's real smoothness in alpha, taken
+    // from ambientCG's roughness maps: mean 63-229 of 255 across the 30
+    // materials. The shipped maps' masks average 36. Physically fair, but it
+    // reads in game as the whole map being wet - Sung Island's grass sat at
+    // 115. Scaling the stratum's maskRemapMax.w did nothing on the Playtest
+    // build, so the alpha itself is scaled, to the same per-role targets the
+    // source-texture mode writes (RoleSmoothness).
+
+    /// Scale a DXT5 texture's alpha so its top-mip mean lands on `target`,
+    /// every mip alike, keeping the texture's own variation. Only ever
+    /// lowers: returns false and leaves the buffer untouched if it is not
+    /// DXT5, is not whole blocks, or is already at or below the target.
+    public static bool ScaleDxt5AlphaMean(byte[] dds, double target)
+    {
+        if (dds == null || dds.Length < 128 ||
+            dds[0] != 0x44 || dds[1] != 0x44 || dds[2] != 0x53 || dds[3] != 0x20 ||
+            (BitConverter.ToInt32(dds, 80) & 0x4) == 0 ||
+            dds[84] != (byte)'D' || dds[85] != (byte)'X' || dds[86] != (byte)'T' || dds[87] != (byte)'5')
+            return false;
+        int start = 128;
+        if ((dds.Length - start) % 16 != 0) return false;
+
+        int w = BitConverter.ToInt32(dds, 16), h = BitConverter.ToInt32(dds, 12);
+        int topBlocks = Math.Max(1, (w + 3) / 4) * Math.Max(1, (h + 3) / 4);
+        if (start + topBlocks * 16 > dds.Length) return false;
+
+        var a8 = new int[16];
+        double sum = 0;
+        for (int b = 0; b < topBlocks; b++)
+        {
+            DecodeDxt5Alpha(dds, start + b * 16, a8);
+            for (int i = 0; i < 16; i++) sum += a8[i];
+        }
+        double mean = sum / (topBlocks * 16.0);
+        if (mean <= target) return false;
+
+        double k = target / mean;
+        for (int p = start; p < dds.Length; p += 16)
+        {
+            DecodeDxt5Alpha(dds, p, a8);
+            for (int i = 0; i < 16; i++) a8[i] = (int)Math.Round(a8[i] * k);
+            EncodeDxt5Alpha(dds, p, a8);
+        }
         return true;
     }
 
