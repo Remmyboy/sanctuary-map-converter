@@ -408,7 +408,7 @@ namespace SanctuaryMapConverter.Core
                 ("skylightTemperature", bio.Sky),
                 ("exposure", bio.Exposure), ("exposureCompensation", 0.0), ("skyboxExposure", 12.0),
                 ("fogAttenuationDistance", fogAtt),
-                ("fogBaseHeight", 6.0), ("fogMaximumHeight", 140.0), ("fogMaximumDistance", 1800.0), ("fogAnisotropy", 0.0),
+                ("fogBaseHeight", 6.0), ("fogMaximumHeight", 140.0), ("fogMaximumDistance", 1500.0), ("fogAnisotropy", 0.0),
                 ("skybox", Json.Obj(("path", "Environment/Skybox/kloofendal_48d_partly_cloudy_puresky_4k.exr"))),
                 // "PlayableArea" is the key the engine looks up (it falls back
                 // to the first area, which is how the old "Playable" worked).
